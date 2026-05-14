@@ -1,0 +1,26 @@
+# —— Web 应用（web/）——
+web/node_modules/
+web/.next/
+web/out/
+web/build/
+web/.vercel/
+web/.pnpm-debug.log*
+web/npm-debug.log*
+web/yarn-debug.log*
+web/yarn-error.log*
+web/*.tsbuildinfo
+web/next-env.d.ts
+web/.env
+web/.env.local
+!web/.env.example
+web/prisma/dev.db
+web/prisma/dev.db-journal
+web/coverage/
+web/app/generated/prisma/
+
+# —— 工具与系统 ——
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db

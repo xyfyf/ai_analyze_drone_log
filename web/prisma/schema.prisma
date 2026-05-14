@@ -1,0 +1,31 @@
+// Prisma schema：MVP 本地 SQLite 存储分析任务与诊断 JSON
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+/// 单次黑匣子上传与分析结果（与 PRD 中 logs / reports 概念对齐的最小实现）
+model Analysis {
+  id                  String   @id @default(cuid())
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  /// 原始文件名（审计展示）
+  fileName            String
+  /// 解析到的采样行数
+  rowCount            Int
+  /// §1.2 UserContext JSON
+  userContext         String
+  /// 与日志交叉校验结果 JSON 数组
+  contextValidation   String
+  /// 特征管道输出（incident + stability + pid 等）
+  features            String?
+  /// 最终面向用户的诊断报告 JSON
+  diagnosis           String?
+  status              String   @default("pending")
+  errorMessage        String?
+}

@@ -1,0 +1,96 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f4f7fe;
+  --foreground: #0f172a;
+  --muted: #64748b;
+  --border: #e2e8f0;
+  --surface: #ffffff;
+  --surface-elevated: #eef2ff;
+  --accent: #6366f1;
+  --accent-hover: #4f46e5;
+  --card-shadow: 0 4px 24px rgb(15 23 42 / 0.07);
+  --mesh-1: rgba(255, 106, 0, 0.14);
+  --mesh-2: rgba(99, 102, 241, 0.12);
+  --mesh-3: rgba(245, 158, 11, 0.12);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans), ui-sans-serif, "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0b1020;
+    --foreground: #f1f5f9;
+    --muted: #94a3b8;
+    --border: #2d3a55;
+    --surface: #121a2e;
+    --surface-elevated: #1a2540;
+    --accent: #818cf8;
+    --accent-hover: #a5b4fc;
+    --card-shadow: 0 4px 28px rgb(0 0 0 / 0.45);
+    --mesh-1: rgba(255, 120, 40, 0.22);
+    --mesh-2: rgba(99, 102, 241, 0.2);
+    --mesh-3: rgba(250, 204, 21, 0.12);
+  }
+}
+
+/* 全页柔色网格 + 轻微漂移，偏 Z 世代氛围 */
+body {
+  color: var(--foreground);
+  background-color: var(--background);
+  background-image:
+    radial-gradient(ellipse 110% 90% at 8% -15%, var(--mesh-1), transparent 52%),
+    radial-gradient(ellipse 90% 70% at 100% 0%, var(--mesh-2), transparent 48%),
+    radial-gradient(ellipse 80% 60% at 50% 110%, var(--mesh-3), transparent 45%);
+  background-attachment: fixed;
+}
+
+@keyframes mesh-drift {
+  0%,
+  100% {
+    filter: hue-rotate(0deg);
+  }
+  50% {
+    filter: hue-rotate(12deg);
+  }
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.45;
+  background: radial-gradient(circle at 20% 80%, rgba(236, 72, 153, 0.06), transparent 35%),
+    radial-gradient(circle at 80% 60%, rgba(34, 211, 238, 0.05), transparent 30%);
+  animation: mesh-drift 18s ease-in-out infinite;
+}
+
+/* 主内容叠在装饰层之上 */
+body > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* 首页大标题渐变字 */
+.hero-title-gradient {
+  background: linear-gradient(105deg, #0f172a 0%, #6366f1 38%, #ec4899 72%, #f59e0b 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+@media (prefers-color-scheme: dark) {
+  .hero-title-gradient {
+    background: linear-gradient(105deg, #f8fafc 0%, #a5b4fc 35%, #f472b6 68%, #fcd34d 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+}
