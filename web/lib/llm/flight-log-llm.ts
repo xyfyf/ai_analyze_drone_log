@@ -1,8 +1,7 @@
-import OpenAI from "openai";
 import type { ParsedBlackbox } from "@/lib/blackbox/parse-csv";
 import type { DiagnosisReport, LlmGuidance, LlmBilingualPayload } from "@/lib/analysis/build-diagnosis";
 import type { IncidentFeatures } from "@/lib/analysis/incident-features";
-import { getLlmModel } from "@/lib/llm/create-client";
+import type { LlmChatClient } from "@/lib/llm/create-client";
 import type { AppLocale } from "@/lib/i18n/translate";
 
 const BRIEFING_MAX_CHARS = 28_000;
@@ -287,7 +286,7 @@ const FALLBACK_SAFETY_EN = "Apply parameter changes incrementally and assume all
  * 用户切换 UI 语种时，报告页直接挑对应语种内容，无需再次调 LLM。
  */
 export async function runFlightLogAnalystLlm(
-  client: OpenAI,
+  client: LlmChatClient,
   briefingMarkdown: string,
   /** 仅作日志/调试标记；输出永远是双语 */
   _locale: AppLocale,
@@ -311,47 +310,45 @@ Hard rules:
 
   const userPayload = `下面是结构化飞行日志简报（Markdown）。Below is the structured flight-log briefing.\n请仅输出按上述 schema 的 JSON / Output JSON only.\n\n${briefingMarkdown}`;
 
-  try {
-    const completion = await client.chat.completions.create({
-      model: getLlmModel(),
-      temperature: 0.25,
-      max_tokens: 5_500,
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: userPayload },
-      ],
-    });
-    const raw = completion.choices[0]?.message?.content;
-    if (!raw) return null;
-    const root = JSON.parse(raw) as Record<string, unknown>;
-    const zh = parseSection(root.zh as Record<string, unknown> | undefined);
-    const en = parseSection(root.en as Record<string, unknown> | undefined);
-    if (!zh && !en) return null;
+  const raw = await client.chatJson({
+    system,
+    user: userPayload,
+    maxTokens: 5_500,
+    temperature: 0.25,
+  });
+  if (!raw) return null;
 
-    const out: LlmBilingualPayload = {};
-    if (zh) {
-      out.zh = {
-        summary: zh.summary,
-        guidance: {
-          overview: zh.guidance.overview,
-          sop: zh.guidance.sop,
-          safety: zh.guidance.safety.length ? zh.guidance.safety : [FALLBACK_SAFETY_ZH],
-        },
-      };
-    }
-    if (en) {
-      out.en = {
-        summary: en.summary,
-        guidance: {
-          overview: en.guidance.overview,
-          sop: en.guidance.sop,
-          safety: en.guidance.safety.length ? en.guidance.safety : [FALLBACK_SAFETY_EN],
-        },
-      };
-    }
-    return out;
+  let root: Record<string, unknown>;
+  try {
+    root = JSON.parse(raw) as Record<string, unknown>;
   } catch {
     return null;
   }
+
+  const zh = parseSection(root.zh as Record<string, unknown> | undefined);
+  const en = parseSection(root.en as Record<string, unknown> | undefined);
+  if (!zh && !en) return null;
+
+  const out: LlmBilingualPayload = {};
+  if (zh) {
+    out.zh = {
+      summary: zh.summary,
+      guidance: {
+        overview: zh.guidance.overview,
+        sop: zh.guidance.sop,
+        safety: zh.guidance.safety.length ? zh.guidance.safety : [FALLBACK_SAFETY_ZH],
+      },
+    };
+  }
+  if (en) {
+    out.en = {
+      summary: en.summary,
+      guidance: {
+        overview: en.guidance.overview,
+        sop: en.guidance.sop,
+        safety: en.guidance.safety.length ? en.guidance.safety : [FALLBACK_SAFETY_EN],
+      },
+    };
+  }
+  return out;
 }

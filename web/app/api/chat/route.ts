@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { createLlmClient, getLlmModel, hasLlmCredentials } from "@/lib/llm/create-client";
+import { createLlmClient, hasLlmCredentials } from "@/lib/llm/create-client";
 
 export const runtime = "nodejs";
 
@@ -24,7 +24,8 @@ const BodySchema = z.object({
 });
 
 /**
- * 对话式调参（MVP）：将固定官网摘录注入 system prompt；支持 DeepSeek（DEEPSEEK_API_KEY）或 OpenAI（OPENAI_API_KEY）。
+ * 对话式调参（MVP）：将固定官网摘录注入 system prompt；
+ * 支持 Anthropic Claude / DeepSeek / OpenAI（按 .env 自动选）。
  */
 export async function POST(req: Request) {
   const json = await req.json().catch(() => null);
@@ -36,7 +37,7 @@ export async function POST(req: Request) {
   if (!hasLlmCredentials()) {
     return NextResponse.json({
       reply:
-        "当前实例未配置 DEEPSEEK_API_KEY 或 OPENAI_API_KEY。以下为内置官方参考摘录，请在 Configurator 中小步修改并实飞验证。",
+        "当前实例未配置 ANTHROPIC_API_KEY / DEEPSEEK_API_KEY / OPENAI_API_KEY 任一。以下为内置官方参考摘录，请在 Configurator 中小步修改并实飞验证。",
       citations: STATIC_CITATIONS,
       model: null,
     });
@@ -50,41 +51,38 @@ export async function POST(req: Request) {
       model: null,
     });
   }
-  try {
-    const completion = await client.chat.completions.create({
-      model: getLlmModel(),
-      response_format: { type: "json_object" },
-      messages: [
-        {
-          role: "system",
-          content: `你是 Betaflight 调参助手（MVP）。用户飞控栈：${parsed.data.fc_stack}。
+
+  const system = `你是 Betaflight 调参助手（MVP）。用户飞控栈：${parsed.data.fc_stack}。
 你只能依据下列「官方摘录」回答问题；不得发明不存在的参数名或 CLI。若用户问的内容与摘录无关，请回答无法在已给官方摘录中找到依据，并建议用户查阅完整文档链接。
 输出 JSON 格式：{"reply":"...","citations_used":[{"title":"","url":"","quote_snippet":""}]}
 官方摘录：
-${JSON.stringify(STATIC_CITATIONS, null, 2)}`,
-        },
-        { role: "user", content: parsed.data.message },
-      ],
-    });
+${JSON.stringify(STATIC_CITATIONS, null, 2)}`;
 
-    const raw = completion.choices[0]?.message?.content ?? "{}";
-    let payload: { reply?: string; citations_used?: unknown };
-    try {
-      payload = JSON.parse(raw);
-    } catch {
-      payload = { reply: raw, citations_used: [] };
-    }
+  const raw = await client.chatJson({
+    system,
+    user: parsed.data.message,
+    maxTokens: 1_500,
+    temperature: 0.3,
+  });
 
-    return NextResponse.json({
-      reply: payload.reply ?? "",
-      citations: payload.citations_used ?? STATIC_CITATIONS,
-      model: getLlmModel(),
-    });
-  } catch {
+  if (!raw) {
     return NextResponse.json({
       reply: "大模型请求失败，以下为内置官方参考摘录。",
       citations: STATIC_CITATIONS,
-      model: null,
+      model: client.modelName,
     });
   }
+
+  let payload: { reply?: string; citations_used?: unknown };
+  try {
+    payload = JSON.parse(raw);
+  } catch {
+    payload = { reply: raw, citations_used: [] };
+  }
+
+  return NextResponse.json({
+    reply: payload.reply ?? "",
+    citations: payload.citations_used ?? STATIC_CITATIONS,
+    model: client.modelName,
+  });
 }

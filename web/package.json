@@ -10,6 +10,7 @@
     "postinstall": "prisma generate"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.101.0",
     "@foxglove/ulog": "^2.3.2",
     "@prisma/client": "5.22.0",
     "dataflashlog": "^1.0.0",
