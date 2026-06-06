@@ -108,6 +108,7 @@
     "body_mix_note": "说明：下方假设列表、数值指标、PID 草案等仍含离线规则引擎与统计算法结果，可能与界面语言混排（MVP）。",
     "body_llm_note": "「AI 通俗解读与 SOP」由大模型根据同一次分析生成的结构化简报（Markdown + 已算特征）生成；请结合实飞现象与官方文档交叉核对。",
     "llm_disabled_hint": "未配置大模型 API Key：无「AI 通俗解读与 SOP」区块。在 web/.env 设置 DEEPSEEK_API_KEY 或 OPENAI_API_KEY 后重新上传分析即可。",
+    "locale_fallback_note": "本报告生成于另一语种，当前未找到对应中文版本，临时显示其它语种内容；重新上传分析可获得双语完整版本。",
     "llm_block_title": "AI 通俗解读与操作规程（SOP）",
     "llm_overview": "整体说明",
     "llm_sop": "建议执行步骤（按顺序）",

@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 import type { ParsedBlackbox } from "@/lib/blackbox/parse-csv";
-import type { DiagnosisReport, LlmGuidance } from "@/lib/analysis/build-diagnosis";
+import type { DiagnosisReport, LlmGuidance, LlmBilingualPayload } from "@/lib/analysis/build-diagnosis";
 import type { IncidentFeatures } from "@/lib/analysis/incident-features";
 import { getLlmModel } from "@/lib/llm/create-client";
 import type { AppLocale } from "@/lib/i18n/translate";
@@ -269,71 +269,88 @@ function normalizeStringArray(v: unknown, max: number): string[] {
   return v.filter((x): x is string => typeof x === "string" && x.trim().length > 0).slice(0, max);
 }
 
+function parseSection(j: Record<string, unknown> | undefined): { summary: string; guidance: LlmGuidance } | null {
+  if (!j || typeof j !== "object") return null;
+  const summary = typeof j.summary === "string" ? j.summary.trim() : "";
+  const overview = typeof j.overview === "string" ? j.overview.trim() : "";
+  const sop = normalizeStringArray(j.sop, 10);
+  const safety = normalizeStringArray(j.safety, 8);
+  if (!summary || !overview || sop.length < 1) return null;
+  return { summary, guidance: { overview, sop, safety } };
+}
+
+const FALLBACK_SAFETY_ZH = "改参后须小步验证，实飞风险自担。";
+const FALLBACK_SAFETY_EN = "Apply parameter changes incrementally and assume all in-flight risk yourself.";
+
 /**
- * 将简报发给大模型，要求其返回 summary + 通俗 overview + SOP 列表 + 安全提醒；解析失败返回 null。
+ * 将简报发给大模型，要求其**一次性**同时返回 ZH 与 EN 两个语种的 summary/overview/sop/safety。
+ * 用户切换 UI 语种时，报告页直接挑对应语种内容，无需再次调 LLM。
  */
 export async function runFlightLogAnalystLlm(
   client: OpenAI,
   briefingMarkdown: string,
-  locale: AppLocale,
-): Promise<{ summary: string; guidance: LlmGuidance } | null> {
-  const systemEn = `You are a careful small-UAS flight-log analyst. You receive a Markdown briefing built from parsed log statistics plus an internal heuristic JSON block.
+  /** 仅作日志/调试标记；输出永远是双语 */
+  _locale: AppLocale,
+): Promise<LlmBilingualPayload | null> {
+  void _locale;
+  const system = `You are a careful small-UAS flight-log analyst. The user message is a Markdown briefing built from parsed log statistics plus an internal heuristic JSON block.
 
 Hard rules:
-1) Use ONLY facts present in the briefing. Do not invent crashes, hardware faults, GPS coordinates, or numeric values not stated.
-2) If evidence is weak or the briefing says "unknown / insufficient evidence", say that clearly in plain language.
-3) Output ONLY valid JSON with exactly these keys:
-   {"summary": string, "overview": string, "sop": string[], "safety": string[]}
-4) "summary": one concise English sentence.
-5) "overview": 2–4 short paragraphs, non-technical where possible, for the pilot/mechanic.
-6) "sop": 4–8 ordered, actionable steps (ground checks, config exports, incremental tuning workflow). No markdown inside strings.
-7) "safety": 2–5 reminders about incremental changes and flight testing risk.`;
+1) Use ONLY facts present in the briefing. Never invent crashes, hardware faults, GPS coordinates, or numeric values that are not stated.
+2) If evidence is weak or the briefing says "unknown / 证据不足 / insufficient evidence", you MUST say so explicitly in the overview.
+3) Output ONLY valid JSON with EXACTLY these top-level keys:
+   {
+     "zh": {"summary": string, "overview": string, "sop": string[], "safety": string[]},
+     "en": {"summary": string, "overview": string, "sop": string[], "safety": string[]}
+   }
+4) The two language sections MUST describe the SAME conclusions, just translated; do not draw different conclusions in different languages.
+5) summary: one concise sentence in that language.
+6) overview: 2–4 short paragraphs in plain language for a pilot/mechanic.
+7) sop: 4–8 ordered, actionable steps. No markdown inside strings.
+8) safety: 2–5 reminders about incremental changes and flight-test risk.`;
 
-  const systemZh = `你是严谨的小型无人机飞行日志分析助手。用户消息中是一份 Markdown「结构化简报」，由服务端从日志解析、统计以及内部规则引擎 JSON 组成。
-
-硬性要求：
-1）只根据简报中已出现的信息下结论，不得编造事故、故障件、GPS 细节或简报未给出的数值。
-2）若证据弱或简报标明 unknown / 证据不足，必须在 overview 中明确说明不确定性。
-3）只输出合法 JSON，且仅包含以下键：
-   {"summary": string, "overview": string, "sop": string[], "safety": string[]}
-4）summary：一句中文摘要。
-5）overview：2–4 段通俗中文，面向飞手/维护人员，少用内部字段名。
-6）sop：4–8 条有序、可执行步骤（地面检查、导出配置、小步试飞与调参顺序等）；字符串内不要用 markdown。
-7）safety：2–5 条安全与试飞风险提示（改参须小步、自担风险等）。`;
-
-  const userPayload =
-    locale === "en"
-      ? `Below is the structured flight-log briefing (Markdown). Read it and return the JSON object.\n\n${briefingMarkdown}`
-      : `以下为结构化飞行日志简报（Markdown）。请阅读后只输出 JSON。\n\n${briefingMarkdown}`;
+  const userPayload = `下面是结构化飞行日志简报（Markdown）。Below is the structured flight-log briefing.\n请仅输出按上述 schema 的 JSON / Output JSON only.\n\n${briefingMarkdown}`;
 
   try {
     const completion = await client.chat.completions.create({
       model: getLlmModel(),
       temperature: 0.25,
-      max_tokens: 3_000,
+      max_tokens: 5_500,
       response_format: { type: "json_object" },
       messages: [
-        { role: "system", content: locale === "en" ? systemEn : systemZh },
+        { role: "system", content: system },
         { role: "user", content: userPayload },
       ],
     });
     const raw = completion.choices[0]?.message?.content;
     if (!raw) return null;
-    const j = JSON.parse(raw) as {
-      summary?: string;
-      overview?: string;
-      sop?: unknown;
-      safety?: unknown;
-    };
-    const summary = typeof j.summary === "string" ? j.summary.trim() : "";
-    const overview = typeof j.overview === "string" ? j.overview.trim() : "";
-    const sop = normalizeStringArray(j.sop, 10);
-    const safety = normalizeStringArray(j.safety, 8);
-    if (!summary || !overview || sop.length < 1) return null;
-    return {
-      summary,
-      guidance: { overview, sop, safety: safety.length ? safety : ["改参后须小步验证，实飞风险自担。"] },
-    };
+    const root = JSON.parse(raw) as Record<string, unknown>;
+    const zh = parseSection(root.zh as Record<string, unknown> | undefined);
+    const en = parseSection(root.en as Record<string, unknown> | undefined);
+    if (!zh && !en) return null;
+
+    const out: LlmBilingualPayload = {};
+    if (zh) {
+      out.zh = {
+        summary: zh.summary,
+        guidance: {
+          overview: zh.guidance.overview,
+          sop: zh.guidance.sop,
+          safety: zh.guidance.safety.length ? zh.guidance.safety : [FALLBACK_SAFETY_ZH],
+        },
+      };
+    }
+    if (en) {
+      out.en = {
+        summary: en.summary,
+        guidance: {
+          overview: en.guidance.overview,
+          sop: en.guidance.sop,
+          safety: en.guidance.safety.length ? en.guidance.safety : [FALLBACK_SAFETY_EN],
+        },
+      };
+    }
+    return out;
   } catch {
     return null;
   }

@@ -18,10 +18,21 @@ export type LlmGuidance = {
   safety: string[];
 };
 
+/**
+ * 同一次分析的 LLM 输出在 ZH/EN 两个语种下分别生成（一次调用多语言返回），
+ * 用户切换 UI 语种时报告页直接挑对应语种，无需重新调 LLM。
+ */
+export type LlmBilingualPayload = {
+  zh?: { summary: string; guidance: LlmGuidance };
+  en?: { summary: string; guidance: LlmGuidance };
+};
+
 export type DiagnosisReport = {
   summary: string;
-  /** 配置 LLM 且调用成功时附带，用于报告页优先展示 */
+  /** 配置 LLM 且调用成功时附带，按上传时 locale 写入；新报告以 llm_bilingual 为准 */
   llm_guidance?: LlmGuidance;
+  /** 新增：同时持有 ZH/EN 两版 AI 输出；老报告字段为空时退回 summary + llm_guidance */
+  llm_bilingual?: LlmBilingualPayload;
   user_context: UserContext;
   context_validation: ContextValidationItem[];
   incident_timeline: { t0: number; t1: number; type: string; note: string }[];
