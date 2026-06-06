@@ -8,6 +8,47 @@ function toNumber(v: unknown): number {
   return Number.isFinite(n) ? n : NaN;
 }
 
+/**
+ * ArduPilot 等专属解析器（pymavlink 路径）抽出的额外信息，
+ * 供 LLM 简报与下游 PID 草案使用；不参与 FFT/规则计算。
+ */
+export type ParsedBlackboxExtras = {
+  /** 哪个解析器产出（pymavlink / js-dataflash / dataflashlog 等） */
+  parser_source?: string;
+  vehicle_type?: string;
+  fw_string?: string;
+  /** PARM：从日志末尾读到的当前完整参数表（key→value） */
+  params?: Record<string, number>;
+  /** ATT 跟踪误差（度，RMS） */
+  attitude_summary?: {
+    samples: number;
+    rms_err_rp_deg?: number;
+    rms_err_yaw_deg?: number;
+    rms_err_roll_deg?: number;
+    rms_err_pitch_deg?: number;
+  };
+  /** ArduPilot VIBE 自带振动指标（m/s²） */
+  vibration_summary?: {
+    samples: number;
+    max_vibe_x?: number;
+    max_vibe_y?: number;
+    max_vibe_z?: number;
+    mean_vibe_x?: number;
+    mean_vibe_y?: number;
+    mean_vibe_z?: number;
+    clip0_max?: number;
+    clip1_max?: number;
+    clip2_max?: number;
+  };
+  /** MODE 切换事件（time_us, mode 名/编号, 切换原因） */
+  mode_events?: {
+    time_us: number;
+    mode: unknown;
+    mode_num: unknown;
+    reason: unknown;
+  }[];
+};
+
 export type ParsedBlackbox = {
   /** # 开头的元数据键值（尽力解析） */
   meta: Record<string, string>;
@@ -21,6 +62,8 @@ export type ParsedBlackbox = {
   headers: string[];
   /** 推断的采样率 Hz（由 time 列差分中位数得到） */
   sampleRateHz: number;
+  /** 仅 ArduPilot pymavlink 解析路径会附带，CSV/PX4 路径为 undefined */
+  extras?: ParsedBlackboxExtras;
 };
 
 const MAX_ROWS = 120_000;

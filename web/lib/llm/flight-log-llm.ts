@@ -64,6 +64,63 @@ function pickColumnIndicesForStats(parsed: ParsedBlackbox, maxCols: number): num
   return out;
 }
 
+/** ArduPilot 参数太多（动辄 700+），按农植机/通用调参最常关注的前缀挑出来给模型看。 */
+const PARAM_PREFIXES_KEEP: ReadonlyArray<string> = [
+  "ATC_RAT_RLL_",
+  "ATC_RAT_PIT_",
+  "ATC_RAT_YAW_",
+  "ATC_ANG_",
+  "ATC_ACCEL_",
+  "ATC_THR_MIX_",
+  "ATC_INPUT_TC",
+  "INS_HNTCH_",
+  "INS_HNTC2_",
+  "INS_GYRO_FILTER",
+  "INS_ACCEL_FILTER",
+  "PSC_VELXY_",
+  "PSC_POSXY_",
+  "PSC_VELZ_",
+  "PSC_POSZ_",
+  "PSC_ACCZ_",
+  "MOT_THST_HOVER",
+  "MOT_THST_EXPO",
+  "MOT_BAT_",
+  "MOT_PWM_",
+  "MOT_SPIN_",
+  "EK3_",
+  "GPS_",
+  "WPNAV_",
+  "RC_OPTIONS",
+  "FRAME_TYPE",
+  "FRAME_CLASS",
+  "Q_",
+];
+
+const PARAM_MAX_KEEP = 80;
+
+function pickAgriRelevantParams(params: Record<string, number>): [string, number][] {
+  const out: [string, number][] = [];
+  const seen = new Set<string>();
+  for (const prefix of PARAM_PREFIXES_KEEP) {
+    for (const [k, v] of Object.entries(params)) {
+      if (seen.has(k)) continue;
+      if (k === prefix || k.startsWith(prefix)) {
+        out.push([k, v]);
+        seen.add(k);
+        if (out.length >= PARAM_MAX_KEEP) return out;
+      }
+    }
+  }
+  return out;
+}
+
+function formatParamValue(v: number): string {
+  if (!Number.isFinite(v)) return String(v);
+  if (Number.isInteger(v) && Math.abs(v) < 1e7) return v.toString();
+  if (Math.abs(v) < 0.01) return v.toExponential(3);
+  return v.toFixed(4).replace(/0+$/, "").replace(/\.$/, "");
+}
+
 function slimMeta(meta: Record<string, string>, maxChars: number): string {
   const entries = Object.entries(meta);
   let lines = entries.map(([k, v]) => `- ${k}: ${v}`);
@@ -120,6 +177,61 @@ export function buildFlightLogBriefingMarkdown(
     deterministic_summary: diagnosis.summary,
   };
 
+  const extras = parsed.extras;
+  const extrasSections: string[] = [];
+  if (extras) {
+    extrasSections.push("", `## ArduPilot 解析专属字段（${extras.parser_source ?? "pymavlink"}）`);
+    if (extras.vehicle_type || extras.fw_string) {
+      extrasSections.push(
+        `- vehicle_type: ${extras.vehicle_type ?? "-"}`,
+        `- fw_string: ${extras.fw_string ?? "-"}`,
+      );
+    }
+
+    if (extras.attitude_summary) {
+      const a = extras.attitude_summary;
+      extrasSections.push(
+        ``,
+        `### ATT 跟踪误差（度，RMS；${a.samples} 采样）`,
+        `- err_rp_deg(直接):  ${a.rms_err_rp_deg?.toFixed(3) ?? "-"}`,
+        `- err_yaw_deg(直接): ${a.rms_err_yaw_deg?.toFixed(3) ?? "-"}`,
+        `- err_roll_deg(由 DesRoll-Roll 算): ${a.rms_err_roll_deg?.toFixed(3) ?? "-"}`,
+        `- err_pitch_deg(由 DesPitch-Pitch 算): ${a.rms_err_pitch_deg?.toFixed(3) ?? "-"}`,
+      );
+    }
+
+    if (extras.vibration_summary) {
+      const v = extras.vibration_summary;
+      extrasSections.push(
+        ``,
+        `### VIBE 振动（ArduPilot 自带，单位 m/s²；${v.samples} 采样；阈值约 30 报警 / 60 危险）`,
+        `- max_vibe_x: ${v.max_vibe_x?.toFixed(2) ?? "-"}, mean: ${v.mean_vibe_x?.toFixed(2) ?? "-"}`,
+        `- max_vibe_y: ${v.max_vibe_y?.toFixed(2) ?? "-"}, mean: ${v.mean_vibe_y?.toFixed(2) ?? "-"}`,
+        `- max_vibe_z: ${v.max_vibe_z?.toFixed(2) ?? "-"}, mean: ${v.mean_vibe_z?.toFixed(2) ?? "-"}`,
+        `- clip0_max: ${v.clip0_max ?? "-"}, clip1_max: ${v.clip1_max ?? "-"}, clip2_max: ${v.clip2_max ?? "-"}`,
+      );
+    }
+
+    if (extras.mode_events && extras.mode_events.length) {
+      const events = extras.mode_events.slice(0, 30);
+      extrasSections.push(``, `### MODE 切换事件（最多 30 条）`);
+      for (const ev of events) {
+        const sec = (ev.time_us / 1e6).toFixed(1);
+        extrasSections.push(`- t=${sec}s mode=${String(ev.mode)} mode_num=${String(ev.mode_num)} reason=${String(ev.reason)}`);
+      }
+    }
+
+    if (extras.params) {
+      const keep = pickAgriRelevantParams(extras.params);
+      if (keep.length) {
+        extrasSections.push(``, `### PARM：飞控当前参数（节选 ${keep.length} 项，按 ATC_* / INS_* / PSC_* / MOT_* / GPS_* / EK3_* / WPNAV_* / RC* 优先）`);
+        const lines: string[] = ["| 参数名 | 值 |", "| --- | ---: |"];
+        for (const [k, v] of keep) lines.push(`| ${k} | ${formatParamValue(v)} |`);
+        extrasSections.push(...lines);
+      }
+    }
+  }
+
   const parts = [
     `# 飞行日志结构化简报`,
     `> 说明：本简报由服务端从原始日志解析与统计得到，供你（大模型）生成通俗解读与可执行 SOP；非完整原始数据。`,
@@ -137,6 +249,7 @@ export function buildFlightLogBriefingMarkdown(
     ``,
     `## 尾部窗口数值统计（便于理解量级与噪声，非频谱原始数组）`,
     ...statLines,
+    ...extrasSections,
     ``,
     `## 规则引擎已算出的结构化结论（JSON）`,
     "```json",

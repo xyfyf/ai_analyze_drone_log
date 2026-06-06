@@ -4,6 +4,10 @@ import { DataflashParser } from "js-dataflash-parser";
 import type { ParsedBlackbox } from "@/lib/blackbox/parse-csv";
 import { normalizeHeaderName } from "@/lib/blackbox/normalize-header";
 import { ParseLogError } from "@/lib/blackbox/parse-errors";
+import {
+  isPymavlinkAvailable,
+  parseArduPilotBinViaPymavlink,
+} from "@/lib/blackbox/parse-ardupilot-pymavlink";
 
 type LogEvent = { name: string; TimeUS: number; [k: string]: unknown };
 
@@ -119,9 +123,22 @@ async function loadApMessages(bytes: Uint8Array): Promise<LogEvent[]> {
 }
 
 /**
- * 解析 ArduPilot DataFlash `.bin`（新版 AP_Logger 与旧版），合成与 Betaflight CSV 对齐的列名。
+ * 解析 ArduPilot DataFlash `.bin`：
+ * 1) **首选 pymavlink**（需本机装 Python + pymavlink）：抽取 IMU/RCOU/BAT + PARM/ATT/VIBE/MODE，
+ *    精度与字段广度更接近 MAVExplorer / Mission Planner。
+ * 2) 失败或不可用时回退到内置 TS 解析（新版 0xA395 走 js-dataflash-parser，旧版走 dataflashlog）。
  */
 export async function parseArduPilotBin(bytes: Uint8Array): Promise<ParsedBlackbox> {
+  if (await isPymavlinkAvailable()) {
+    try {
+      return await parseArduPilotBinViaPymavlink(bytes);
+    } catch (err) {
+      console.warn(
+        `[parse-ardupilot-bin] pymavlink 路径失败，回退到 TS 解析：${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
   const msgs = await loadApMessages(bytes);
   const imuLike = msgs.filter((m) => /^IMU|^GYR/i.test(m.name) && gyroTriplet(m));
   imuLike.sort((a, b) => a.TimeUS - b.TimeUS);
