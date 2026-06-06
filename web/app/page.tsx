@@ -19,19 +19,24 @@ export default function HomePage() {
   const defaultCtx = useMemo<Partial<UserContext>>(
     () => ({
       aircraft_class: "multicopter",
-      fc_stack: "betaflight",
-      cell_count: 6,
-      prop_size_inch: 5,
-      prop_blade_count: 3,
-      motor_kv: 1950,
-      takeoff_weight_g: 680,
+      fc_stack: "ardupilot",
+      rotor_count: 6,
+      cell_count: 12,
+      battery_brand_series: "12S",
+      prop_size_inch: 30,
+      prop_blade_count: 2,
+      prop_brand_model: "3011",
+      motor_kv: 100,
+      motor_model: "Hobbywing X8 (好盈 X8)",
+      esc_protocol: "DroneCAN",
+      takeoff_weight_g: 25000,
     }),
     [],
   );
 
   const [ctx, setCtx] = useState<Partial<UserContext>>(defaultCtx);
-  /** 轴距下拉：具体 mm、空字符串=未填、__custom__=自定义数值 */
-  const [wheelbaseSelect, setWheelbaseSelect] = useState<string>("225");
+  /** 轴距下拉：具体 mm、空字符串=未填、__custom__=自定义数值；六旋翼 30" 桨默认 1800mm */
+  const [wheelbaseSelect, setWheelbaseSelect] = useState<string>("1800");
   const [wheelbaseCustomMm, setWheelbaseCustomMm] = useState("");
 
   function resolveWheelbaseMm(): number | undefined {
@@ -88,6 +93,7 @@ export default function HomePage() {
       motor_model: ctx.motor_model,
       esc_protocol: ctx.esc_protocol,
       takeoff_weight_g: ctx.takeoff_weight_g,
+      rotor_count: ctx.rotor_count,
       recent_changes: ctx.recent_changes,
       recent_param_diff: ctx.recent_param_diff,
       gyro_imu_hardware: ctx.gyro_imu_hardware,
@@ -276,12 +282,32 @@ export default function HomePage() {
             </div>
 
             <div>
+              <label className="mb-1 block text-sm font-medium text-[var(--foreground)]">{t("home.rotor_count")}</label>
+              <input
+                type="number"
+                min={1}
+                max={16}
+                className="w-full rounded-xl border border-[var(--border)] bg-white/85 px-3 py-2.5 text-sm shadow-sm backdrop-blur-sm transition focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-400/25 dark:bg-slate-900/55"
+                value={ctx.rotor_count ?? ""}
+                onChange={(e) => setCtx((c) => ({ ...c, rotor_count: e.target.value ? Number(e.target.value) : undefined }))}
+              />
+            </div>
+            <div>
               <label className="mb-1 block text-sm font-medium text-[var(--foreground)]">{t("home.cell_s")}</label>
               <input
                 type="number"
                 className="w-full rounded-xl border border-[var(--border)] bg-white/85 px-3 py-2.5 text-sm shadow-sm backdrop-blur-sm transition focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-400/25 dark:bg-slate-900/55"
                 value={ctx.cell_count ?? ""}
                 onChange={(e) => setCtx((c) => ({ ...c, cell_count: e.target.value ? Number(e.target.value) : undefined }))}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-[var(--foreground)]">{t("home.battery_brand")}</label>
+              <input
+                className="w-full rounded-xl border border-[var(--border)] bg-white/85 px-3 py-2.5 text-sm shadow-sm backdrop-blur-sm transition focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-400/25 dark:bg-slate-900/55"
+                placeholder={t("home.battery_brand_ph")}
+                value={ctx.battery_brand_series ?? ""}
+                onChange={(e) => setCtx((c) => ({ ...c, battery_brand_series: e.target.value || undefined }))}
               />
             </div>
             <div>
@@ -297,12 +323,30 @@ export default function HomePage() {
               />
             </div>
             <div>
+              <label className="mb-1 block text-sm font-medium text-[var(--foreground)]">{t("home.prop_brand")}</label>
+              <input
+                className="w-full rounded-xl border border-[var(--border)] bg-white/85 px-3 py-2.5 text-sm shadow-sm backdrop-blur-sm transition focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-400/25 dark:bg-slate-900/55"
+                placeholder={t("home.prop_brand_ph")}
+                value={ctx.prop_brand_model ?? ""}
+                onChange={(e) => setCtx((c) => ({ ...c, prop_brand_model: e.target.value || undefined }))}
+              />
+            </div>
+            <div>
               <label className="mb-1 block text-sm font-medium text-[var(--foreground)]">{t("home.motor_kv")}</label>
               <input
                 type="number"
                 className="w-full rounded-xl border border-[var(--border)] bg-white/85 px-3 py-2.5 text-sm shadow-sm backdrop-blur-sm transition focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-400/25 dark:bg-slate-900/55"
                 value={ctx.motor_kv ?? ""}
                 onChange={(e) => setCtx((c) => ({ ...c, motor_kv: e.target.value ? Number(e.target.value) : undefined }))}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-[var(--foreground)]">{t("home.motor_model")}</label>
+              <input
+                className="w-full rounded-xl border border-[var(--border)] bg-white/85 px-3 py-2.5 text-sm shadow-sm backdrop-blur-sm transition focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-400/25 dark:bg-slate-900/55"
+                placeholder={t("home.motor_model_ph")}
+                value={ctx.motor_model ?? ""}
+                onChange={(e) => setCtx((c) => ({ ...c, motor_model: e.target.value || undefined }))}
               />
             </div>
             <div>

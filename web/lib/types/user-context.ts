@@ -18,6 +18,8 @@ export const UserContextSchema = z.object({
   motor_model: z.string().max(200).optional(),
   esc_protocol: z.string().max(120).optional(),
   takeoff_weight_g: z.coerce.number().positive().optional(),
+  /** 电机数量（多旋翼/直升机适用），如四旋翼=4、六旋翼=6、八旋翼=8 */
+  rotor_count: z.coerce.number().int().min(1).max(16).optional(),
   recent_changes: z
     .array(
       z.object({

@@ -17,14 +17,6 @@ export function validateUserContextAgainstLog(
 ): ContextValidationItem[] {
   const out: ContextValidationItem[] = [];
 
-  if (ctx.fc_stack !== "betaflight") {
-    out.push({
-      code: "fc_stack_mismatch_mvp",
-      level: "warn",
-      message: "MVP 解析器仅针对 Betaflight CSV 充分测试；当前选择的飞控栈与解析假设可能不一致。",
-    });
-  }
-
   const vbat = getColumnSeries(parsed, ["vbat", "vbatlatest", "vbatt"]);
   if (ctx.cell_count && vbat.length) {
     const maxV = Math.max(...vbat.filter((x) => Number.isFinite(x)));
@@ -43,6 +35,14 @@ export function validateUserContextAgainstLog(
       code: "multicopter_wheelbase_tiny",
       level: "info",
       message: "多旋翼轴距很小，请确认是否为微型机；若填写错误可能影响 PID 先验提示。",
+    });
+  }
+
+  if (ctx.aircraft_class === "multicopter" && ctx.rotor_count && (ctx.rotor_count < 3 || ctx.rotor_count % 1 !== 0)) {
+    out.push({
+      code: "rotor_count_unusual",
+      level: "info",
+      message: `电机数量为 ${ctx.rotor_count}，较少见；常规多旋翼为 3/4/6/8。`,
     });
   }
 

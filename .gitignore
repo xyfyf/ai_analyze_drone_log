@@ -24,3 +24,9 @@ web/app/generated/prisma/
 *.swp
 .DS_Store
 Thumbs.db
+
+# —— Playwright / 调试截图（本地工作产物，不入仓） ——
+.playwright-mcp/
+/home*.png
+/chat*.png
+/screenshot*.png
