@@ -97,7 +97,6 @@ export default async function ReportPage({ params }: PageProps) {
         </section>
       )}
 
-      <p className="text-xs leading-relaxed text-[var(--muted)]">{d.disclaimer}</p>
     </main>
   );
 }
