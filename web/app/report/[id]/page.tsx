@@ -36,11 +36,7 @@ export default async function ReportPage({ params }: PageProps) {
         </Link>
         <h1 className="text-2xl font-bold tracking-tight">{t("report.title")}</h1>
         <p className="text-sm text-[var(--muted)]">{metaLine}</p>
-        {d.llm_guidance ? (
-          <p className="rounded-lg border border-emerald-200/80 bg-emerald-50 px-3 py-2 text-xs leading-relaxed text-emerald-950 dark:border-emerald-900/50 dark:bg-emerald-950/25 dark:text-emerald-100">
-            {t("report.body_llm_note")}
-          </p>
-        ) : (
+        {!d.llm_guidance && (
           <p className="rounded-lg border border-slate-200/80 bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-900 dark:border-slate-700/60 dark:bg-slate-900/40 dark:text-slate-100">
             {t("report.llm_disabled_hint")}
           </p>
